@@ -340,58 +340,64 @@
                 }
             }
             
-            async function fetchStations(routeId) {
-                 // This endpoint is more efficient for getting a list of stops for a route.
-                 const url = `https://open-bus-stride-api.hasadna.org.il/gtfs_stops/list?route_id=${routeId}`;
-                 try {
-                    const response = await fetch(url);
-                     if (!response.ok) {
-                         throw new Error(`HTTP error! status: ${response.status}`);
-                     }
-                    const data = await response.json();
-                    // Remove duplicates based on stop_id and map to a consistent format
-                    const stationsMap = new Map();
-                    data.forEach(stop => {
-                        if (!stationsMap.has(stop.stop_id)) {
-                            stationsMap.set(stop.stop_id, { 
-                                id: stop.stop_id,
-                                name: stop.stop_name, 
-                                city: stop.stop_city 
-                            });
-                        }
-                    });
-                    return Array.from(stationsMap.values());
-                } catch (error) {
-                    console.error(`Failed to fetch stations for route ${routeId}:`, error);
-                    return [];
-                }
+async function fetchStations(routeId) {
+    const today = new Date();
+    const twoWeeksFromNow = new Date();
+    twoWeeksFromNow.setDate(today.getDate() + 14);
+
+    const dateFrom = today.toISOString();
+    const dateTo = twoWeeksFromNow.toISOString();
+
+    const url = `https://open-bus-stride-api.hasadna.org.il/gtfs_ride_stops/list?limit=100&get_count=false&arrival_time_from=${encodeURIComponent(dateFrom)}&arrival_time_to=${encodeURIComponent(dateTo)}&gtfs_route__line_refs=${routeId}&order_by=id%20asc`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        const stationsMap = new Map();
+        data.forEach(stop => {
+            if (!stationsMap.has(stop.gtfs_stop_id)) {
+                stationsMap.set(stop.gtfs_stop_id, {
+                    id: stop.gtfs_stop_id,
+                    name: stop.gtfs_stop__name,
+                    city: stop.gtfs_stop__city
+                });
             }
+        });
+        return Array.from(stationsMap.values());
+    } catch (error) {
+        console.error(`Failed to fetch stations for route ${routeId}:`, error);
+        return [];
+    }
+}
 
-            async function fetchScheduleForDay(line, date) {
-                const dateString = formatDate(date);
-                const nextDay = new Date(date);
-                nextDay.setDate(date.getDate() + 1);
-                const nextDateString = formatDate(nextDay);
+async function fetchScheduleForDay(line, date) {
+    const startDateTime = new Date(date);
+    const endDateTime = new Date(date);
+    endDateTime.setHours(endDateTime.getHours() + 3);
 
-                // This endpoint is for the full timetable, which is needed here.
-                const urls = [
-                    `https://open-bus-stride-api.hasadna.org.il/route_timetable/list?line_refs=${line.route.id}&date_from=${dateString}&date_to=${dateString}`,
-                    `https://open-bus-stride-api.hasadna.org.il/route_timetable/list?line_refs=${line.route.id}&date_from=${nextDateString}&date_to=${nextDateString}`
-                ];
-                
-                let allStopEvents = [];
-                for (const url of urls) {
-                    try {
-                        const response = await fetch(url);
-                        if (!response.ok) continue;
-                        const data = await response.json();
-                        allStopEvents = allStopEvents.concat(data);
-                    } catch (error) {
-                        console.error('Failed to fetch schedule part:', error);
-                    }
-                }
+    const dateFrom = startDateTime.toISOString();
+    const dateTo = endDateTime.toISOString();
 
-                const startTime = new Date(`${dateString}T03:00:00`);
+    const url = `https://open-bus-stride-api.hasadna.org.il/gtfs_ride_stops/list?limit=100&get_count=false&arrival_time_from=${encodeURIComponent(dateFrom)}&arrival_time_to=${encodeURIComponent(dateTo)}&gtfs_stop__code=${line.station.id}&gtfs_route__line_refs=${line.route.route_short_name}&order_by=id%20asc`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        const data = await response.json();
+        return data.map(event => ({
+            line: event.gtfs_route__route_short_name,
+            time: new Date(event.arrival_time).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', hour12: false })
+        }));
+    } catch (error) {
+        console.error('Failed to fetch schedule:', error);
+        return [];
+    }
+}                const startTime = new Date(`${dateString}T03:00:00`);
                 const endTime = new Date(`${nextDateString}T02:59:59`);
 
                 const arrivals = allStopEvents
@@ -739,3 +745,4 @@
     </script>
 </body>
 </html>
+
