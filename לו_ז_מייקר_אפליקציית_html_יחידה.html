@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>לו"ז מייקר</title>
+  <style>
+    :root{--bg:#0b1324;--card:#121a2f;--muted:#9fb0ca;--text:#e6eefc;--accent:#7cc4ff;--ok:#71e0a9;--warn:#ffd166;--err:#ff6b6b}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji";background:var(--bg);color:var(--text)}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;background:linear-gradient(180deg, #0d1730 0%, #0b1324 100%);position:sticky;top:0;z-index:5;border-bottom:1px solid #243154}
+    .title{font-size:20px;font-weight:700;letter-spacing:.3px}
+    .actions{display:flex;gap:8px}
+    button, .btn{appearance:none;border:1px solid #2b3a63;background:#162346;color:var(--text);padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:600}
+    button:hover,.btn:hover{background:#1b2b56}
+    .btn-accent{border-color:#2a6eba;background:#13406d}
+    .btn-ok{border-color:#2a6e4f;background:#103a2d}
+    .btn-danger{border-color:#6e2a2a;background:#3a1010}
+    .container{max-width:1100px;margin:24px auto;padding:0 16px}
+    .card{background:var(--card);border:1px solid #243154;border-radius:16px;padding:16px}
+    .groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:12px}
+    .group{display:flex;flex-direction:column;gap:10px}
+    .group h3{margin:0;font-size:18px}
+    .muted{color:var(--muted);font-size:13px}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap}
+    .empty{opacity:.8;border:1px dashed #33446f;padding:28px;border-radius:14px;text-align:center}
+    .kbd{display:inline-block;border:1px solid #2b3a63;border-bottom-width:3px;background:#0f1b34;border-radius:8px;padding:0 8px;font-family:ui-monospace,Menlo,Consolas,monospace}
+
+    /* Modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(3,10,22,.6);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+    .modal{width:min(960px,100%);max-height:88vh;overflow:auto}
+    .modal header{position:sticky;top:0}
+    .steps{display:flex;gap:6px;margin:6px 0 14px}
+    .step{flex:1;height:6px;border-radius:999px;background:#1a274a}
+    .step.on{background:linear-gradient(90deg,#3aa9ff,#7cc4ff)}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    label{font-weight:600}
+    input,select,textarea{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2b3a63;background:#0f1b34;color:var(--text)}
+    .list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+    .item{border:1px solid #2b3a63;border-radius:12px;padding:10px}
+    .small{font-size:12px;color:var(--muted)}
+    .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #2b3a63;border-radius:999px;padding:4px 8px;font-size:12px;background:#0f1b34}
+
+    /* Print */
+    @media print{
+      header,.no-print{display:none!important}
+      body{background:#fff;color:#000}
+      .print-area{display:block}
+      .print-day{page-break-inside:avoid;margin-bottom:16px}
+      .print-day h2{font-size:18px;margin:0 0 8px}
+      table{width:100%;border-collapse:collapse}
+      th,td{border:1px solid #000;padding:6px;text-align:right}
+    }
+    table{width:100%;border-collapse:collapse}
+    th,td{border:1px solid #243154;padding:8px;text-align:right}
+    th{background:#0f1b34}
+    .progress{height:10px;background:#0f1b34;border:1px solid #2b3a63;border-radius:10px;overflow:hidden}
+    .progress>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#3aa9ff,#71e0a9)}
+    a{color:var(--accent)}
+  </style>
+</head>
+<body>
+  <header class="no-print">
+    <div class="title">🚌 לו"ז מייקר</div>
+    <div class="actions">
+      <button id="helpBtn">עזרה</button>
+      <a class="btn" target="_blank" rel="noopener" href="https://docs.google.com/forms/d/e/1FAIpQLSfMFmC7esFcy0zpMIzT0kk-CluXSRKBRBIVHNPxKRlUW_YZUA/viewform?usp=header">משוב</a>
+      <button id="addGroup" class="btn-accent">➕ הוסף קבוצת קווים</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2 style="margin:0 0 6px">קבוצות קווים שמורות</h2>
+      <div id="groups" class="groups"></div>
+      <div id="emptyState" class="empty" style="display:none">אין עדיין קבוצות. לחצו על <span class="kbd">הוסף קבוצת קווים</span> כדי להתחיל.</div>
+    </section>
+
+    <section id="printArea" class="print-area" style="display:none"></section>
+  </main>
+
+  <!-- Modal: Help -->
+  <div id="helpModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modal card">
+      <header class="row">
+        <div id="helpTitle" class="title">עזרה</div>
+        <button onclick="closeModal('helpModal')">סגור ✕</button>
+      </header>
+      <div class="muted" style="margin:8px 0 16px">האפליקציה שומרת נתונים מקומיים בלבד (localStorage). אין צורך בחשבון.</div>
+      <ol>
+        <li>צרו <b>קבוצת קווים</b> ותנו לה שם.</li>
+        <li>הוסיפו <b>מספרי קווים</b>, בחרו לכל אחד מסלול (מס' שיווקי/כיוון/חלופה).</li>
+        <li>בחרו <b>תחנה</b> לכל קו.</li>
+        <li>במסך "צור לו"ז" בחרו עד 5 ימים לשבוע הקרוב וכינויים.</li>
+        <li>לאחר איסוף הנתונים תוכלו <b>להוריד CSV</b> לכל יום או <b>להדפיס</b> את הכול.</li>
+      </ol>
+      <p class="small">נוצר באמצעות לו"ז מייקר. נתוני זמן אמת ו-GTFS מתוך <a target="_blank" rel="noopener" href="https://open-bus-stride-api.hasadna.org.il/">Open Bus Stride API</a>.</p>
+    </div>
+  </div>
+
+  <!-- Modal: Group Wizard -->
+  <div id="groupWizard" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="gwTitle">
+    <div class="modal card">
+      <header class="row">
+        <div id="gwTitle" class="title">אשף קבוצת קווים</div>
+        <div class="steps" style="flex:1 1 auto">
+          <div class="step" id="gwS1"></div>
+          <div class="step" id="gwS2"></div>
+          <div class="step" id="gwS3"></div>
+          <div class="step" id="gwS4"></div>
+        </div>
+        <button onclick="closeModal('groupWizard')">סגור ✕</button>
+      </header>
+
+      <div id="gwBody"></div>
+
+      <footer class="row" style="justify-content:space-between;margin-top:12px">
+        <button id="gwPrev">אחורה</button>
+        <div class="row">
+          <button id="gwNext" class="btn-accent">הבא ▶</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Modal: Schedule Wizard -->
+  <div id="schedWizard" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="swTitle">
+    <div class="modal card">
+      <header class="row">
+        <div id="swTitle" class="title">אשף יצירת לו"ז</div>
+        <div class="steps" style="flex:1 1 auto">
+          <div class="step" id="swS1"></div>
+          <div class="step" id="swS2"></div>
+          <div class="step" id="swS3"></div>
+          <div class="step" id="swS4"></div>
+          <div class="step" id="swS5"></div>
+          <div class="step" id="swS6"></div>
+          <div class="step" id="swS7"></div>
+        </div>
+        <button onclick="closeModal('schedWizard')">סגור ✕</button>
+      </header>
+      <div id="swBody"></div>
+      <footer class="row" style="justify-content:space-between;margin-top:12px">
+        <button id="swPrev">אחורה</button>
+        <div class="row">
+          <button id="swNext" class="btn-accent">הבא ▶</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+  // ====== Utilities ======
+  const API = {
+    routes: 'https://open-bus-stride-api.hasadna.org.il/gtfs_routes/list',
+    rideStops: 'https://open-bus-stride-api.hasadna.org.il/gtfs_ride_stops/list'
+  };
+  const STORAGE_KEY = 'lvz_maker_groups_v1';
+  const tzName = 'Asia/Jerusalem';
+
+  function $(sel,root=document){return root.querySelector(sel)}
+  function $$(sel,root=document){return [...root.querySelectorAll(sel)]}
+  function openModal(id){const el = document.getElementById(id); el.style.display='flex'}
+  function closeModal(id){const el = document.getElementById(id); el.style.display='none'}
+
+  function loadGroups(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch{ return [] } }
+  function saveGroups(groups){ localStorage.setItem(STORAGE_KEY, JSON.stringify(groups)) }
+
+  function heb(s){ return (s||'').toString() }
+
+  function fmtDate(d){
+    const dd = new Intl.DateTimeFormat('he-IL',{day:'2-digit',month:'2-digit'}).format(d)
+    return dd; // dd/mm
+  }
+
+  function getWeekRange(){
+    // 7 ימים החל מהיום
+    const base = new Date();
+    const days = [...Array(7)].map((_,i)=>{
+      const dt = new Date(base); dt.setDate(base.getDate()+i); dt.setHours(0,0,0,0); return dt;
+    });
+    return days;
+  }
+
+  function isoWithTZ(date){
+    // יוצרת ISO עם אזור זמן Asia/Jerusalem
+    const fmt = new Intl.DateTimeFormat('en-CA', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:tzName});
+    const parts = Object.fromEntries(fmt.formatToParts(date).map(p=>[p.type,p.value]));
+    const local = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
+    // חשב הפרש דקה בין UTC לזמן ישראל
+    const utc = new Date(date.toLocaleString('en-US',{timeZone:'UTC'}));
+    const localTz = new Date(date.toLocaleString('en-US',{timeZone:tzName}));
+    const offMin = Math.round((localTz - utc)/60000);
+    const sign = offMin>=0?'+':'-';
+    const abs = Math.abs(offMin);
+    const hh = String(Math.floor(abs/60)).padStart(2,'0');
+    const mm = String(abs%60).padStart(2,'0');
+    return `${local}${sign}${hh}:${mm}`;
+  }
+
+  function q(params){
+    return Object.entries(params)
+      .filter(([,v])=>v!==undefined && v!==null && v!=='')
+      .map(([k,v])=>`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+      .join('&');
+  }
+
+  async function fetchJSON(url){
+    const res = await fetch(url, {headers:{'accept':'application/json'}});
+    if(!res.ok) throw new Error(`שגיאת רשת (${res.status})`);
+    return res.json();
+  }
+
+  // ====== Render Groups ======
+  function renderGroups(){
+    const groups = loadGroups();
+    const wrap = document.getElementById('groups');
+    wrap.innerHTML = '';
+    if(!groups.length){ $('#emptyState').style.display='block'; return }
+    $('#emptyState').style.display='none';
+    groups.forEach((g,idx)=>{
+      const el = document.createElement('div'); el.className='group card';
+      el.innerHTML = `
+        <h3>${heb(g.name)}</h3>
+        <div class="muted">${g.lines?.length||0} קווים</div>
+        <div class="toolbar">
+          <button onclick="openEdit(${idx})">ערוך</button>
+          <button class="btn-ok" onclick="openSchedule(${idx})">צור לו"ז</button>
+          <button class="btn-danger" onclick="delGroup(${idx})">מחק</button>
+        </div>
+      `;
+      wrap.appendChild(el);
+    })
+  }
+
+  function delGroup(i){
+    if(!confirm('למחוק את הקבוצה?')) return;
+    const groups = loadGroups();
+    groups.splice(i,1); saveGroups(groups); renderGroups();
+  }
+
+  // ====== Group Wizard ======
+  let gw = { step:1, editingIndex:null, model:null, tempRoutes:[], tempStops:{} };
+
+  function openAdd(){
+    gw = { step:1, editingIndex:null, model:{name:'',lines:[]}, tempRoutes:[], tempStops:{} };
+    updateGw(); openModal('groupWizard');
+  }
+  function openEdit(index){
+    const g = loadGroups()[index];
+    gw = { step:1, editingIndex:index, model:JSON.parse(JSON.stringify(g)), tempRoutes:[], tempStops:{} };
+    updateGw(); openModal('groupWizard');
+  }
+
+  async function searchRoutesByShortName(short){
+    const today = new Date(); const week = new Date(today); week.setDate(today.getDate()+7);
+    const url = `${API.routes}?${q({limit:300,get_count:false,date_from:today.toISOString().slice(0,10),date_to:week.toISOString().slice(0,10),route_short_name:short,order_by:'id asc'})}`;
+    return fetchJSON(url);
+  }
+
+  async function collectUniqueStopsForRoute(route){
+    // מושך רשימת עצירות ייחודית למסלול בשבוע הקרוב
+    const today = new Date(); const next = new Date(today); next.setDate(today.getDate()+7);
+    const url = `${API.rideStops}?${q({limit:300,get_count:false,arrival_time_from:isoWithTZ(new Date(today.setHours(3,0,0,0))),arrival_time_to:isoWithTZ(new Date(next.setHours(2,59,0,0))),gtfs_route__route_mkt:route.route_mkt,gtfs_route__route_direction:route.route_direction,gtfs_route__route_alternative:route.route_alternative,order_by:'id asc'})}`;
+    const rows = await fetchJSON(url);
+    const map = new Map();
+    rows.forEach(r=>{
+      if(!map.has(r.gtfs_stop__code)) map.set(r.gtfs_stop__code, {code:r.gtfs_stop__code,name:r.gtfs_stop__name,city:r.gtfs_stop__city});
+    });
+    return [...map.values()].sort((a,b)=>a.city?.localeCompare(b.city||'he')||0);
+  }
+
+  function updateGw(){
+    ['gwS1','gwS2','gwS3','gwS4'].forEach((id,i)=>{ const el=$(`#${id}`); if(!el)return; el.classList.toggle('on', gw.step>=i+1) })
+    const body = $('#gwBody');
+    if(gw.step===1){
+      body.innerHTML = `
+        <div class="row"><label>שם לקבוצה</label><input id="gwName" value="${heb(gw.model.name)}" placeholder="לדוגמה: קווים מהבית לירושלים" /></div>
+        <div class="muted">שלב 1/4</div>`;
+    }
+    if(gw.step===2){
+      body.innerHTML = `
+        <div class="row">
+          <label>קווים שנבחרו</label>
+          <div id="chosenLines" class="list"></div>
+        </div>
+        <div class="row">
+          <input id="lineInput" placeholder="מספר קו (לדוגמה 134)" inputmode="numeric"/>
+          <button id="addLineBtn" class="btn-accent">הוספה וחיפוש</button>
+        </div>
+        <div id="routesResults" class="list"></div>
+        <div class="muted">שלב 2/4 – בחרו מסלול לכל קו.</div>`;
+      // render existing
+      renderChosenLines();
+      $('#addLineBtn').onclick = async ()=>{
+        const val = $('#lineInput').value.trim();
+        if(!val) return alert('נא להזין מספר קו');
+        $('#routesResults').innerHTML = '<div class="muted">טוען מסלולים…</div>';
+        try{
+          const routes = await searchRoutesByShortName(val);
+          if(!routes.length) $('#routesResults').innerHTML = '<div class="muted">לא נמצאו מסלולים.</div>';
+          else {
+            $('#routesResults').innerHTML = routes.map((r,i)=>`
+              <div class="item">
+                <div><b>${r.route_short_name}</b> — ${heb(r.route_long_name)}</div>
+                <div class="small">שיווקי: <span class="pill">${r.route_mkt}</span> | כיוון: <span class="pill">${r.route_direction}</span> | חלופה: <span class="pill">${r.route_alternative}</span></div>
+                <button class="btn-ok" data-i="${i}">בחרו מסלול זה</button>
+              </div>
+            `).join('');
+            $$('#routesResults button').forEach((btn)=>{
+              btn.onclick = ()=>{
+                const r = routes[+btn.dataset.i];
+                // אם כבר יש לקו זה בחירה – החלפה
+                const idx = gw.model.lines.findIndex(x=>x.route_short_name===r.route_short_name);
+                const entry = { route_short_name:r.route_short_name, route_long_name:r.route_long_name, route_mkt:r.route_mkt, route_direction:r.route_direction, route_alternative:r.route_alternative, stop:null };
+                if(idx>=0) gw.model.lines[idx]=entry; else gw.model.lines.push(entry);
+                renderChosenLines();
+                alert('נבחר המסלול. המשיכו לשלב הבא לבחירת תחנה.');
+              }
+            })
+          }
+        }catch(e){ $('#routesResults').innerHTML = `<div class="small" style="color:var(--err)">שגיאה בחיפוש: ${e.message}</div>` }
+      }
+    }
+    if(gw.step===3){
+      body.innerHTML = `<div class="muted">שלב 3/4 – בחרו תחנה לכל קו. מתבצע חיפוש לשבוע הקרוב, ייתכן שייקח מספר שניות.</div><div id="stopsWrap" class="list"></div>`;
+      loadStopsUI();
+    }
+    if(gw.step===4){
+      const lines = gw.model.lines || [];
+      body.innerHTML = `
+        <h3 style="margin:6px 0">סקירה</h3>
+        ${!lines.length?'<div class="muted">לא נבחרו קווים.</div>':`<table><thead><tr><th>קו</th><th>מסלול</th><th>תחנה</th></tr></thead><tbody>
+          ${lines.map(l=>`<tr><td>${l.route_short_name}</td><td>${heb(l.route_long_name)}</td><td>${l.stop?`${l.stop.name} (${l.stop.code})`:'—'}</td></tr>`).join('')}</tbody></table>`}
+        <div class="muted">שלב 4/4 – שמירה.</div>`;
+    }
+
+    // Nav buttons
+    $('#gwPrev').disabled = gw.step===1;
+    $('#gwNext').textContent = gw.step===4? 'שמירה 💾' : 'הבא ▶';
+  }
+
+  function renderChosenLines(){
+    const host = $('#chosenLines'); host.innerHTML='';
+    (gw.model.lines||[]).forEach((l,i)=>{
+      const el = document.createElement('div'); el.className='item';
+      el.innerHTML = `<div class="row" style="justify-content:space-between"><div><b>${l.route_short_name}</b> — ${heb(l.route_long_name||'לא נבחר')}</div><button class="btn-danger" data-i="${i}">הסר</button></div>`;
+      host.appendChild(el);
+    });
+    $$('#chosenLines .btn-danger').forEach(btn=>btn.onclick=()=>{ gw.model.lines.splice(+btn.dataset.i,1); renderChosenLines(); })
+  }
+
+  async function loadStopsUI(){
+    const wrap = $('#stopsWrap'); wrap.innerHTML='';
+    for(const [idx,l] of (gw.model.lines||[]).entries()){
+      const box = document.createElement('div'); box.className='item'; box.innerHTML = `<div><b>קו ${l.route_short_name}</b><div class="small">${heb(l.route_long_name)}</div></div><div class="small">טוען תחנות…</div>`;
+      wrap.appendChild(box);
+      try{
+        const stops = await collectUniqueStopsForRoute(l);
+        box.innerHTML = `<div><b>קו ${l.route_short_name}</b><div class="small">${heb(l.route_long_name)}</div></div>
+          <select id="stop_${idx}"><option value="">בחרו תחנה…</option>${stops.map(s=>`<option value="${s.code}">${heb(s.city||'')} – ${heb(s.name)} (${s.code})</option>`).join('')}</select>`;
+        const sel = $(`#stop_${idx}`); sel.value = l.stop?.code || '';
+        sel.onchange = ()=>{
+          const code = sel.value; const opt = sel.selectedOptions[0];
+          if(!code){ l.stop=null; return }
+          const txt = opt.textContent; const parts = /\s–\s(.+)\s\((\d+)\)/.exec(txt);
+          l.stop = {code: +code, name: parts?parts[1]:txt, city: (txt.split(' – ')[0]||'')};
+        }
+      }catch(e){ box.innerHTML = `<div><b>קו ${l.route_short_name}</b></div><div class="small" style="color:var(--err)">שגיאה בטעינת תחנות: ${e.message}</div>` }
+    }
+  }
+
+  $('#gwPrev').onclick = ()=>{ if(gw.step>1) { gw.step--; updateGw() } };
+  $('#gwNext').onclick = ()=>{
+    if(gw.step===1){ const name = $('#gwName').value.trim(); if(!name) return alert('נא להזין שם לקבוצה'); gw.model.name=name; gw.step=2; updateGw(); return }
+    if(gw.step===2){ if(!(gw.model.lines||[]).length) return alert('נא לבחור לפחות מסלול אחד'); gw.step=3; updateGw(); return }
+    if(gw.step===3){
+      const missing = (gw.model.lines||[]).some(l=>!l.stop);
+      if(missing) return alert('נא לבחור תחנה לכל קו');
+      gw.step=4; updateGw(); return;
+    }
+    if(gw.step===4){
+      const groups = loadGroups();
+      if(gw.editingIndex!=null) groups[gw.editingIndex]=gw.model; else groups.push(gw.model);
+      saveGroups(groups); closeModal('groupWizard'); renderGroups(); alert('נשמר בהצלחה ✔');
+    }
+  };
+
+  // ====== Schedule Wizard ======
+  let sw = { step:1, gIndex:null, model:null, selectedDays:[], dayLabels:{}, results:{}, progress:0 };
+
+  function openSchedule(index){
+    const g = loadGroups()[index];
+    sw = { step:1, gIndex:index, model:JSON.parse(JSON.stringify(g)), selectedDays:[], dayLabels:{}, results:{}, progress:0 };
+    updateSw(); openModal('schedWizard');
+  }
+
+  function updateSw(){
+    ['swS1','swS2','swS3','swS4','swS5','swS6','swS7'].forEach((id,i)=>{ const el=$(`#${id}`); if(!el)return; el.classList.toggle('on', sw.step>=i+1) })
+    const body = $('#swBody');
+
+    if(sw.step===1){
+      const lines = sw.model.lines||[];
+      body.innerHTML = `<div class="muted">שלב 1/7 – סקירה ועריכה</div>
+        <table><thead><tr><th>קו</th><th>מסלול</th><th>תחנה</th><th></th></tr></thead>
+        <tbody>${lines.map((l,i)=>`<tr><td>${l.route_short_name}</td><td>${heb(l.route_long_name)}</td><td>${l.stop?`${l.stop.name} (${l.stop.code})`:'—'}</td><td><button data-i="${i}" class="btn">ערוך קו</button></td></tr>`).join('')}</tbody></table>`;
+      $$('#swBody button[data-i]').forEach(btn=>btn.onclick=()=>{ closeModal('schedWizard'); openEdit(sw.gIndex) })
+    }
+
+    if(sw.step===2){
+      const days = getWeekRange();
+      body.innerHTML = `<div class="muted">שלב 2/7 – בחרו עד 5 ימים לשבוע הקרוב</div>
+        <div class="list">${days.map((d,i)=>`<label class="item"><input type="checkbox" value="${d.toISOString()}" onchange="toggleDay(this)"> ${d.toLocaleDateString('he-IL',{weekday:'short',day:'2-digit',month:'2-digit'})}</label>`).join('')}</div>`;
+    }
+
+    if(sw.step===3){
+      const chosen = sw.selectedDays.map(d=>new Date(d));
+      body.innerHTML = `<div class="muted">שלב 3/7 – כינוי לכל יום (אופציונלי). ריק = תאריך (dd/mm)</div>
+      <div class="list">${chosen.map(d=>`<div class="item row"><div class="pill">${d.toLocaleDateString('he-IL',{weekday:'short',day:'2-digit',month:'2-digit'})}</div><input data-key="${d.toDateString()}" placeholder="כינוי ליום זה" /></div>`).join('')}</div>`;
+      $$('#swBody input[data-key]').forEach(inp=>inp.oninput=()=>{ sw.dayLabels[inp.dataset.key]=inp.value })
+    }
+
+    if(sw.step===4){
+      body.innerHTML = `<div class="muted">שלב 4/7 – איסוף נתונים בין 03:00 ל-02:59 ביום שלמחרת עבור כל יום/קו/תחנה. זה עשוי לקחת זמן.</div>
+        <div class="progress" aria-label="התקדמות"><i id="swProg"></i></div>
+        <div id="swProgTxt" class="small">התחלה…</div>`;
+      collectAllData();
+    }
+
+    if(sw.step===5){
+      body.innerHTML = `<div class="muted">שלב 5/7 – עיבוד ושמירה מקומית</div><div>✔ הנתונים נשמרו באופן מקומי עבור כל יום שנבחר.</div>`;
+    }
+
+    if(sw.step===6){
+      // כפתורים להורדה/הדפסה
+      const days = sw.selectedDays.map(d=>new Date(d));
+      body.innerHTML = `<div class="muted">שלב 6/7 – הורדה/הדפסה</div>
+        <div class="row" style="flex-wrap:wrap;gap:8px">${days.map(d=>`<button class="btn" onclick="downloadCSV('${d.toDateString()}')">CSV – ${labelForDay(d)}</button>`).join('')}
+        <button class="btn-ok" onclick="renderPrintPreview()">תצוגת הדפסה לכל הימים</button>
+        </div>`;
+    }
+
+    if(sw.step===7){
+      body.innerHTML = `<div class="muted">שלב 7/7 – סיום</div><div>ניתן לסגור את האשף. תהנו! 🎉</div>`;
+    }
+
+    $('#swPrev').disabled = sw.step===1 || sw.step===4; // לא מאפשר אחורה בזמן איסוף
+    $('#swNext').textContent = sw.step===7? 'סגור' : 'הבא ▶';
+  }
+
+  function toggleDay(cb){
+    const val = cb.value; const i = sw.selectedDays.indexOf(val);
+    if(cb.checked){ if(sw.selectedDays.length>=5){ cb.checked=false; alert('ניתן לבחור עד 5 ימים'); return } sw.selectedDays.push(val) }
+    else if(i>=0) sw.selectedDays.splice(i,1);
+  }
+
+  function labelForDay(d){
+    return (sw.dayLabels[d.toDateString()]||fmtDate(d));
+  }
+
+  $('#swPrev').onclick = ()=>{ if(sw.step>1){ sw.step--; updateSw() } };
+  $('#swNext').onclick = ()=>{
+    if(sw.step===1){ sw.step=2; updateSw(); return }
+    if(sw.step===2){ if(!sw.selectedDays.length) return alert('בחרו לפחות יום אחד'); sw.step=3; updateSw(); return }
+    if(sw.step===3){ sw.step=4; updateSw(); return }
+    if(sw.step===4){ return } // נא להמתין לאיסוף
+    if(sw.step===5){ sw.step=6; updateSw(); return }
+    if(sw.step===6){ sw.step=7; updateSw(); return }
+    if(sw.step===7){ closeModal('schedWizard'); return }
+  };
+
+  async function collectAllData(){
+    const tasks = [];
+    const lines = sw.model.lines||[];
+    const total = sw.selectedDays.length * lines.length;
+    let done = 0;
+    async function tick(){ done++; const pct = Math.round((done/Math.max(total,1))*100); $('#swProg').style.width=pct+'%'; $('#swProgTxt').textContent = `אנא המתן… ${pct}% (${done}/${total})`; }
+
+    for(const dStr of sw.selectedDays){
+      const day = new Date(dStr);
+      const dayKey = day.toDateString();
+      sw.results[dayKey] = [];
+      const start = new Date(day); start.setHours(3,0,0,0);
+      const end = new Date(day); end.setDate(end.getDate()+1); end.setHours(2,59,0,0);
+      const paramsBase = {limit:300,get_count:false,arrival_time_from:isoWithTZ(start),arrival_time_to:isoWithTZ(end),order_by:'arrival_time asc'};
+
+      for(const l of lines){
+        const url = `${API.rideStops}?${q({...paramsBase,gtfs_stop__code:l.stop.code,gtfs_route__route_mkt:l.route_mkt,gtfs_route__route_direction:l.route_direction,gtfs_route__route_alternative:l.route_alternative})}`;
+        tasks.push((async()=>{
+          try{
+            const rows = await fetchJSON(url);
+            const mapped = rows.map(r=>({
+              day: labelForDay(day),
+              route_short_name: r.gtfs_route__route_short_name || l.route_short_name,
+              route_long_name: r.gtfs_route__route_long_name || l.route_long_name,
+              time: r.arrival_time,
+            }));
+            sw.results[dayKey].push(...mapped);
+          }catch(e){ console.error('API stop list error', e); }
+          finally{ tick() }
+        })());
+      }
+    }
+
+    await Promise.all(tasks);
+
+    // שלב 5 – עיבוד ומיון
+    for(const [k,rows] of Object.entries(sw.results)){
+      rows.sort((a,b)=> new Date(a.time) - new Date(b.time));
+    }
+    sw.step=5; updateSw();
+  }
+
+  function downloadCSV(dayKey){
+    const rows = sw.results[dayKey]||[];
+    const name = (sw.dayLabels[dayKey]||fmtDate(new Date(dayKey))) + ',' + sw.model.name + '.csv';
+    const header = ['short_name','long_name','time'];
+    const csv = [header.join(','),...rows.map(r=>[
+      '"'+(r.route_short_name||'')+'"','"'+(r.route_long_name||'').replaceAll('"','""')+'"','"'+new Date(r.time).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})+'"'
+    ].join(','))].join('\n');
+    const blob = new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'}); // BOM לעברית
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  function renderPrintPreview(){
+    const area = $('#printArea'); area.innerHTML=''; area.style.display='block';
+    const allDays = sw.selectedDays.map(d=>new Date(d));
+    for(const d of allDays){
+      const dayKey = d.toDateString(); const rows = sw.results[dayKey]||[];
+      const sec = document.createElement('section'); sec.className='print-day card';
+      sec.innerHTML = `<h2>${labelForDay(d)}</h2>
+        <table><thead><tr><th>שם קו קצר</th><th>שם קו ארוך</th><th>שעת נסיעה</th></tr></thead><tbody>
+        ${rows.map(r=>`<tr><td>${r.route_short_name||''}</td><td>${heb(r.route_long_name||'')}</td><td>${new Date(r.time).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}</td></tr>`).join('')}
+        </tbody></table>
+        <div class="small" style="margin-top:6px">נוצר באמצעות לו"ז מייקר · <a href="https://open-bus-stride-api.hasadna.org.il/" target="_blank" rel="noopener">Open-Bus Stride</a></div>`;
+      area.appendChild(sec);
+    }
+    window.print();
+  }
+
+  // ====== Init ======
+  document.getElementById('helpBtn').onclick = ()=>openModal('helpModal');
+  document.getElementById('addGroup').onclick = openAdd;
+  renderGroups();
+  </script>
+</body>
+</html>
