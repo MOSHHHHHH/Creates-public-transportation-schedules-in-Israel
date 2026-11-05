@@ -52,7 +52,7 @@
 </main>
 <footer class="no-print">פרויקט קוד פתוח · הנתונים נשמרים מקומית בדפדפן · מומלץ לוודא את זמני הנסיעות אצל מפעיל התחבורה</footer>
 </div>
-<dialog id="helpDialog" style="max-width:540px;border:1px solid #cbd9ea;border-radius:16px;padding:22px"><h2>איך משתמשים?</h2><p>צרו קבוצה, הוסיפו קווים ומסלולים, בחרו תחנה לכל קו ושמרו. אחר כך בחרו ימים והפיקו לוח זמנים. בבחירה החכמה ימי פעילות בעלי נסיעות זהות מקובצים יחד.</p><p>המידע הוא לוח זמנים מתוכנן ואינו משקף איחורים בזמן אמת. נתוני הדגמה מסומנים בבירור.</p><button id="closeHelp" class="primary">סגור</button></dialog>
+<dialog id="helpDialog" style="max-width:540px;border:1px solid #cbd9ea;border-radius:16px;padding:22px"><h2>איך משתמשים?</h2><p>צרו קבוצה, הוסיפו קווים ומסלולים, בחרו תחנה לכל קו ושמרו. אחר כך בחרו ימים והפיקו לוח זמנים. בבחירה החכמה ימי פעילות בעלי נסיעות זהות מקובצים יחד.</p><p>המידע הוא לוח זמנים מתוכנן ואינו משקף איחורים בזמן אמת. יום תחבורתי מסתיים ב־02:59 למחרת.</p><button id="closeHelp" class="primary">סגור</button></dialog>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
@@ -67,24 +67,35 @@ function safe(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&
 function notify(message){$("sourceNotice").textContent=message}
 function show(id){["home","editor","generator","results"].forEach(x=>$(x).classList.toggle("hidden",x!==id))}
 function dateISO(d){return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-")}
-function dayDate(n){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+n);return d}
+function dayDate(n){const d=new Date();if(d.getHours()<3)d.setDate(d.getDate()-1);d.setHours(12,0,0,0);d.setDate(d.getDate()+n);return d}
 function dateLabel(d){return d.toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit",weekday:"short"})}
 function timeString(minutes){return String(Math.floor(minutes/60)%24).padStart(2,"0")+":"+String(minutes%60).padStart(2,"0")}
 async function init(){
- try{const response=await fetch("./data/index.json",{cache:"no-store"});if(!response.ok)throw Error("missing");
- const value=await response.json();if(!value.lines||!Array.isArray(value.lines))throw Error("invalid index");
- catalog=value;notify("נתוני GTFS מעובדים · עדכון: "+safe(value.updated||"לא ידוע"));}
- catch{catalog={lines:Object.keys(demoData.lines),updated:"דוגמה"};demo=true;notify("מצב הדגמה בלבד — נתוני GTFS אמיתיים עדיין לא פורסמו. אין להסתמך על שעות הנסיעה המוצגות.");}
- $("availableLines").innerHTML=catalog.lines.map(n=>'<option value="'+safe(n)+'"></option>').join("");
+ try {
+  const response=await fetch("./data/index.json",{cache:"no-store"});
+  if(!response.ok)throw Error("index unavailable");
+  const value=await response.json();
+  if(value.format!==2||!Array.isArray(value.lines)||!value.start)throw Error("invalid data format");
+  catalog=value;
+  notify("לוחות מתוכננים · נתונים עד "+new Date(value.updated).toLocaleString("he-IL")+
+   " · יום תחבורתי 03:00–02:59");
+ }catch(e){
+  catalog={lines:[],start:dateISO(dayDate(0)),days:0};
+  notify("נתוני משרד התחבורה אינם זמינים כרגע. לא יוצגו נתוני הדגמה או שעות לא מאומתות.");
+ }
+ $("availableLines").innerHTML=catalog.lines.map(pair=>'<option value="'+safe(pair[0])+'"></option>').join("");
  renderGroups();
 }
 async function getLine(n){
  if(cache.has(n))return cache.get(n);
- let data;
- if(demo)data=demoData.lines[n];
- else{const response=await fetch("./data/lines/"+encodeURIComponent(n)+".json");if(!response.ok)throw Error("לא נמצאו נתונים לקו "+n);data=await response.json()}
- if(!data||!Array.isArray(data.routes))throw Error("קובץ נתונים לא תקין");
- cache.set(n,data);return data
+ const hit=catalog.lines.find(x=>x[0]===n);
+ if(!hit)throw Error("הקו "+n+" אינו קיים בנתונים העדכניים");
+ const response=await fetch("./data/lines/"+encodeURIComponent(hit[1]));
+ if(!response.ok)throw Error("לא ניתן לטעון נתונים לקו "+n);
+ const data=await response.json();
+ if(!Array.isArray(data.routes))throw Error("קובץ נתונים לא תקין");
+ cache.set(n,data);
+ return data;
 }
 function renderGroups(){
  $("groupCards").innerHTML=groups.map(g=>'<article class="card"><h3>'+safe(g.name)+'</h3><p class="muted small">'+g.lines.length+' קווים</p><p>'+g.lines.map(l=>'<span class="pill">'+safe(l.number)+'</span>').join("")+'</p><div class="actions"><button class="primary" data-generate="'+safe(g.id)+'">צור לו״ז</button><button data-edit="'+safe(g.id)+'">עריכה</button><button class="danger" data-delete="'+safe(g.id)+'">מחק</button></div></article>').join("");
@@ -103,7 +114,7 @@ function renderSelected(){
 async function chooseLine(){
  let n=$("lineNumber").value.trim();$("routeSelect").disabled=true;$("stopSelect").disabled=true;
  $("routeSelect").innerHTML="<option>טוען מסלולים...</option>";
- if(!catalog.lines.includes(n)){$("routeSelect").innerHTML="<option>לא נמצא קו במאגר</option>";return}
+ if(!catalog.lines.some(p=>p[0]===n)){$("routeSelect").innerHTML="<option>לא נמצא קו במאגר</option>";return}
  try{let data=await getLine(n);$("routeSelect").innerHTML='<option value="">בחר מסלול</option>'+data.routes.map((r,i)=>'<option value="'+i+'">'+safe(r.name)+'</option>').join("");$("routeSelect").disabled=false;}
  catch(e){$("routeSelect").innerHTML="<option>שגיאה בטעינת הקו</option>";alert(e.message)}
 }
@@ -131,21 +142,55 @@ function openGenerator(id){selectedGroup=groups.find(x=>x.id===id);if(!selectedG
  $("genLines").textContent=selectedGroup.lines.map(x=>x.number+" · "+x.stopName).join(" | ");
  setMode("smart");show("generator")
 }
-function setMode(v){mode=v;$("smartMode").setAttribute("aria-pressed",v==="smart");$("manualMode").setAttribute("aria-pressed",v==="manual");
- $("modeHelp").textContent=v==="smart"?"נשווה נסיעות בתחנות שבחרת ונקבץ יחד תאריכים עם לוחות זהים.":"בחר תאריכים באופן עצמאי, עד 5 ימים.";
- $("analyze").textContent=v==="smart"?"זהה לוחות זמנים":"הצג לוחות נבחרים";
- $("smartResults").classList.add("hidden");$("generate").classList.add("hidden");renderDays()
+function availableDates(){
+ const result=[];
+ for(let i=0;i<(catalog.days||0);i++){
+  const d=new Date(catalog.start+"T12:00:00");
+  d.setDate(d.getDate()+i);
+  if(d>=dayDate(0))result.push(d);
+ }
+ return result;
 }
-function renderDays(){const dayNames=["א׳","ב׳","ג׳","ד׳","ה׳","ו׳","ש׳"];
- $("dayButtons").innerHTML=Array.from({length:14},(_,i)=>{const d=dayDate(i),selected=chosenDates.includes(dateISO(d));return '<button class="day" data-date="'+dateISO(d)+'" aria-pressed="'+selected+'" aria-label="'+safe(dateLabel(d))+'">'+dayNames[d.getDay()]+'<br><strong>'+d.getDate()+'/'+(d.getMonth()+1)+'</strong><small>'+ (selected?"✓":"")+'</small></button>'}).join("")
+function setMode(v){
+ mode=v;
+ $("smartMode").setAttribute("aria-pressed",v==="smart");
+ $("manualMode").setAttribute("aria-pressed",v==="manual");
+ chosenDates=v==="smart"?availableDates().map(dateISO):[];
+ $("modeHelp").textContent=v==="smart"?
+ "כברירת מחדל נבדוק את כל התאריכים הזמינים ונאחד ימים בעלי לוחות זהים. אפשר לבטל בחירת תאריכים.":
+ "בחר תאריכים באופן עצמאי, עד 5 ימים.";
+ $("analyze").textContent=v==="smart"?"זהה לוחות זמנים":"הצג לוחות נבחרים";
+ $("smartResults").classList.add("hidden");
+ $("generate").classList.add("hidden");
+ renderDays();
+}
+function renderDays(){
+ const dayNames=["א׳","ב׳","ג׳","ד׳","ה׳","ו׳","ש׳"];
+ $("dayButtons").innerHTML=availableDates().map(d=>{
+  const iso=dateISO(d),selected=chosenDates.includes(iso);
+  return '<button class="day" data-date="'+iso+'" aria-pressed="'+selected+'" aria-label="'+safe(dateLabel(d))+'">'+
+    dayNames[d.getDay()]+'<br><strong>'+d.getDate()+'/'+(d.getMonth()+1)+
+    '</strong><small>'+(selected?"✓":"")+'</small></button>';
+ }).join("");
+ if(!catalog.days) $("dayButtons").innerHTML='<p class="muted">נתונים לא זמינים.</p>';
 }
 function chooseDate(iso){if(chosenDates.includes(iso))chosenDates=chosenDates.filter(x=>x!==iso);else if(mode==="smart"||chosenDates.length<5)chosenDates.push(iso);else{alert("בבחירה ידנית ניתן לבחור עד חמישה ימים");return}analyzed=[];$("smartResults").classList.add("hidden");$("generate").classList.add("hidden");renderDays()}
 async function scheduleFor(iso){
- const date=new Date(iso+"T12:00:00"),week=date.getDay(),rows=[];
- for(const l of selectedGroup.lines){const data=await getLine(l.number),route=data.routes.find(r=>r.id===l.routeId);if(!route)throw Error("מסלול "+l.number+" לא נמצא במידע הנוכחי");
- const values=demo?(route.trips[l.stopId]?.[week]||[]):(route.trips?.[l.stopId]?.[iso]||[]);
- for(const m of values)rows.push({line:l.number,route:route.name,stop:l.stopName,min:m,routeId:l.routeId,stopId:l.stopId});}
- rows.sort((a,b)=>a.min-b.min||a.line.localeCompare(b.line,"he"));return rows
+ const index=Math.round((new Date(iso+"T12:00:00")-new Date(catalog.start+"T12:00:00"))/86400000);
+ if(index<0||index>=catalog.days)throw Error("התאריך מחוץ לטווח הנתונים");
+ const mask=1<<index,rows=[];
+ for(const l of selectedGroup.lines){
+  const data=await getLine(l.number);
+  const route=data.routes.find(r=>r.id===l.routeId);
+  if(!route)throw Error("מסלול "+l.number+" השתנה במקור הנתונים. יש לעדכן את הקבוצה.");
+  const stop=route.stops.find(s=>s.id===l.stopId);
+  if(!stop)throw Error("תחנה "+l.stopName+" אינה זמינה במסלול. יש לעדכן את הקבוצה.");
+  const entries=route.t?.[l.stopId]||[];
+  const minutes=entries.filter(entry=>(entry[0]&mask)!==0).flatMap(entry=>entry.slice(1));
+  for(const m of minutes)rows.push({line:l.number,route:route.name,stop:l.stopName,min:m,routeId:l.routeId,stopId:l.stopId});
+ }
+ rows.sort((a,b)=>a.min-b.min||a.line.localeCompare(b.line,"he"));
+ return rows;
 }
 function signature(rows){return JSON.stringify(rows.map(x=>[x.line,x.routeId,x.stopId,x.min]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))))}
 async function analyze(){
@@ -167,7 +212,7 @@ function createResults(){
  selectedTypes=[...document.querySelectorAll("[data-type]:checked")].map(e=>Number(e.dataset.type));
  generated=analyzed.filter(x=>selectedTypes.includes(x.id));
  if(!generated.length){alert("בחר לוח אחד לפחות");return}
- $("resultSource").textContent=demo?"נתוני הדגמה בלבד — השעות אינן אמיתיות.":"לוחות מתוכננים ממאגר GTFS. ייתכנו שינויים, יש לאמת לפני הנסיעה.";
+ $("resultSource").textContent="לוחות מתוכננים ממשרד התחבורה. יום תחבורתי 03:00–02:59 למחרת. ייתכנו שינויים.";
  $("resultTables").innerHTML=generated.map((a,i)=>'<section class="result"><h3 style="margin-top:24px">'+safe(a.dates.join(" · "))+'</h3><table><thead><tr><th>קו</th><th>מסלול</th><th>תחנה</th><th>שעה</th></tr></thead><tbody>'+ (a.rows.length?a.rows.map(r=>'<tr><td>'+safe(r.line)+'</td><td>'+safe(r.route)+'</td><td>'+safe(r.stop)+'</td><td>'+timeString(r.min)+'</td></tr>').join(""):'<tr><td colspan="4">אין נסיעות ביום זה בתחנות שנבחרו</td></tr>')+'</tbody></table><button class="no-print" data-csv="'+i+'" style="margin:14px 0">הורדת CSV ליום זה</button></section>').join("");
  $("downloadActions").innerHTML='<button class="primary" id="printPdf">הדפסה / שמירה כ־PDF</button><button id="allCsv">הורדת CSV לכל הימים</button>';
  show("results")
