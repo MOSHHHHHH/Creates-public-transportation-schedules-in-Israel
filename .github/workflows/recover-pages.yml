@@ -16,8 +16,8 @@ jobs:
     steps:
       - name: Clear only known stale failed GitHub Pages deployment
         env:
-          GH_TOKEN: \${{ github.token }}
-          GH_REPO: \${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           python - <<'PY'
           import json, os, urllib.request, urllib.error
