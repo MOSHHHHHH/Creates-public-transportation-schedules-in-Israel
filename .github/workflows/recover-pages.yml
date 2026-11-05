@@ -1,0 +1,36 @@
+name: Recover blocked Pages deployment
+on:
+  push:
+    paths:
+      - '.github/workflows/recover-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+
+jobs:
+  clear-stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cancel only known stale deployment from prior failed run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          SHA="efd9c6ed5d8e5a08b77f88535e73e546713cba7c"
+          API="https://api.github.com/repos/$GH_REPO/pages/deployments/$SHA"
+          echo "Checking stale Pages deployment $SHA"
+          CODE="$(curl -sS -o /tmp/pages-status.json -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$API")"
+          cat /tmp/pages-status.json
+          if [ "$CODE" = 404 ]; then echo "Deployment does not exist"; exit 0; fi
+          if [ "$CODE" != 200 ]; then echo "Status HTTP $CODE"; exit 1; fi
+          if grep -Eq '"status"[[:space:]]*:[[:space:]]*"succeed"' /tmp/pages-status.json; then
+            echo "Deployment is already successful — leaving it untouched"; exit 0
+          fi
+          echo "Canceling old deployment (not deleting the published site)"
+          CODE="$(curl -sS -X POST -o /tmp/pages-cancel.json -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$API/cancel")"
+          echo "Cancel response: $CODE"
+          test "$CODE" = 204 -o "$CODE" = 404
