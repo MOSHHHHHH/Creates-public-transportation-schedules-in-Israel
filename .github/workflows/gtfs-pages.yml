@@ -1,12 +1,8 @@
 name: Build and publish LZM Maker GTFS
+# Deployment runs separately from branch-based Pages publication.
+# GitHub Pages is currently also publishing main directly; running both on push
+# races two deployments for the same Pages site.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'index.html'
-      - 'scripts/**'
-      - 'tests/**'
-      - '.github/workflows/gtfs-pages.yml'
   workflow_dispatch:
   schedule:
     - cron: '35 5 * * *'
