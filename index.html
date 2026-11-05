@@ -9,7 +9,7 @@
 *{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer;border-radius:10px;border:1px solid #c9d5e5;padding:10px 16px;background:white;color:#183451}button:hover{background:#f1f6fd}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #77b8fa;outline-offset:2px}
 .primary{background:#1659a9;color:white;border-color:#1659a9}.primary:hover{background:#104984}.danger{color:#a72c33}.muted{color:#5b6d80}.small{font-size:.88rem}.pill{display:inline-flex;background:#e9eff8;border-radius:20px;padding:3px 10px;font-size:.85rem;margin:2px}.wrap{max-width:980px;margin:auto;padding:20px}.header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.logo{display:flex;gap:12px;align-items:center}.logo-icon{border-radius:14px;background:#1659a9;color:#fff;padding:13px;font-size:1.3rem}h1{margin:0;font-size:1.45rem}h2{font-size:1.2rem;margin:0 0 12px}h3{margin:0 0 10px;font-size:1.05rem}p{margin:7px 0 15px}.panel{background:#fff;border:1px solid #dce4f0;border-radius:16px;padding:20px;margin-top:18px;box-shadow:0 3px 12px #1e46740b}.hero{background:linear-gradient(120deg,#e6f1ff,#fff)}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.between{justify-content:space-between}.grow{flex:1}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}.card{border:1px solid #dce4f0;border-radius:12px;padding:16px}.badge{background:#fff3d6;border-radius:8px;padding:7px 11px;font-size:.9rem}.notice{border-right:4px solid #e6a900;background:#fff9e9;padding:12px;border-radius:8px;margin-top:15px}.hidden{display:none!important}label{display:block;font-weight:600;margin:12px 0 5px}input,select{width:100%;max-width:100%;border:1px solid #b9c9dd;border-radius:9px;padding:11px;background:white;color:inherit}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.tabs{display:flex;gap:8px}.tabs button[aria-pressed=true]{background:#dceafd;border-color:#1659a9;color:#154e90}.line-entry{padding:12px;border:1px solid #d9e4f0;border-radius:10px;margin:10px 0}.days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.day{min-height:74px;padding:7px 2px}.day[aria-pressed=true]{background:#d9eaff;border:2px solid #1659a9}.day small{display:block}.result{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e3e9f3;text-align:right}th{background:#f3f7fd}footer{padding:28px 0;color:#637184;font-size:.8rem}.actions{display:flex;gap:8px;flex-wrap:wrap}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
 @media(max-width:600px){.wrap{padding:12px}.panel{padding:14px}.days{gap:3px}.day{min-height:65px;font-size:.9rem}.day small{font-size:.67rem}.actions button{flex:1}}
-@media print{header,.no-print,footer{display:none!important}body{background:white}.panel{box-shadow:none;border:none;padding:0}.print-only{display:block!important}table{font-size:11pt}}
+@media print{.print-exclude{display:none!important}header,.no-print,footer{display:none!important}body{background:white}.panel{box-shadow:none;border:none;padding:0}.print-only{display:block!important}table{font-size:11pt}}
 </style>
 </head>
 <body>
@@ -203,20 +203,32 @@ async function analyze(){
  }catch(e){alert("לא ניתן להפיק לוחות זמנים: "+e.message)}
  finally{$("analyze").disabled=false;$("analyze").textContent=mode==="smart"?"זהה לוחות זמנים":"הצג לוחות נבחרים"}
 }
+function suggestedAlias(dates){
+ const w=dates.map(x=>new Date(x+"T12:00:00").getDay());
+ if(w.every(d=>d<=4))return "אמצע שבוע";
+ if(w.every(d=>d===5))return "יום שישי";
+ if(w.every(d=>d===6))return "מוצ״ש";
+ return dates.length===1?new Date(dates[0]+"T12:00:00").toLocaleDateString("he-IL"):"לוח מיוחד";
+}
 function renderAnalysis(){
  $("smartResults").classList.remove("hidden");
- $("smartResults").innerHTML='<h3 style="margin-top:20px">נמצאו '+analyzed.length+' לוחות זמנים שונים</h3>'+analyzed.map(a=>'<label class="line-entry"><input style="width:auto;margin-left:10px" type="checkbox" data-type="'+a.id+'" checked> <strong>'+a.dates.map(safe).join(" · ")+'</strong><span class="muted small"> · '+a.rows.length+' נסיעות</span></label>').join("")+'<p class="muted small">ימים עם אותן נסיעות מאוחדים. כל הבדל בשעת נסיעה יוצר לוח נפרד.</p>';
+ $("smartResults").innerHTML='<h3 style="margin-top:20px">נמצאו '+analyzed.length+' לוחות זמנים שונים</h3>'+analyzed.map(a=>'<div class="line-entry"><label><input style="width:auto;margin-left:10px" type="checkbox" data-type="'+a.id+'" checked> <strong>'+a.dates.map(safe).join(" · ")+'</strong><span class="muted small"> · '+a.rows.length+' נסיעות</span></label><label for="alias-'+a.id+'">כותרת הלוח</label><input id="alias-'+a.id+'" maxlength="70" value="'+safe(suggestedAlias(a.dates))+'"></div>').join("")+'<p class="muted small">ימים עם אותן נסיעות מאוחדים. כל הבדל בשעת נסיעה יוצר לוח נפרד.</p>';
  $("generate").classList.remove("hidden")
 }
 function createResults(){
  selectedTypes=[...document.querySelectorAll("[data-type]:checked")].map(e=>Number(e.dataset.type));
- generated=analyzed.filter(x=>selectedTypes.includes(x.id));
+ generated=analyzed.filter(x=>selectedTypes.includes(x.id)).map(x=>({...x,alias:(document.getElementById("alias-"+x.id)?.value||suggestedAlias(x.dates)).trim()}));
  if(!generated.length){alert("בחר לוח אחד לפחות");return}
  $("resultSource").textContent="לוחות מתוכננים ממשרד התחבורה. יום תחבורתי 03:00–02:59 למחרת. ייתכנו שינויים.";
- $("resultTables").innerHTML=generated.map((a,i)=>'<section class="result"><h3 style="margin-top:24px">'+safe(a.dates.join(" · "))+'</h3><table><thead><tr><th>קו</th><th>מסלול</th><th>תחנה</th><th>שעה</th></tr></thead><tbody>'+ (a.rows.length?a.rows.map(r=>'<tr><td>'+safe(r.line)+'</td><td>'+safe(r.route)+'</td><td>'+safe(r.stop)+'</td><td>'+timeString(r.min)+'</td></tr>').join(""):'<tr><td colspan="4">אין נסיעות ביום זה בתחנות שנבחרו</td></tr>')+'</tbody></table><button class="no-print" data-csv="'+i+'" style="margin:14px 0">הורדת CSV ליום זה</button></section>').join("");
+ $("resultTables").innerHTML=generated.map((a,i)=>'<section class="result" data-result-index="'+i+'"><h3 style="margin-top:24px">'+safe(a.alias)+' — '+safe(a.dates.join(" · "))+'</h3><table><thead><tr><th>קו</th><th>מסלול</th><th>תחנה</th><th>שעה</th></tr></thead><tbody>'+ (a.rows.length?a.rows.map(r=>'<tr><td>'+safe(r.line)+'</td><td>'+safe(r.route)+'</td><td>'+safe(r.stop)+'</td><td>'+timeString(r.min)+'</td></tr>').join(""):'<tr><td colspan="4">אין נסיעות ביום זה בתחנות שנבחרו</td></tr>')+'</tbody></table><div class="actions no-print" style="margin:14px 0"><button data-csv="'+i+'">הורדת CSV</button><button data-print="'+i+'">הדפסה / PDF ללוח זה</button></div></section>').join("");
  $("downloadActions").innerHTML='<button class="primary" id="printPdf">הדפסה / שמירה כ־PDF</button><button id="allCsv">הורדת CSV לכל הימים</button>';
  show("results")
 }
+function printSelected(index){
+ document.querySelectorAll("#resultTables .result").forEach((node,i)=>node.classList.toggle("print-exclude",index!==null&&i!==index));
+ window.print();
+}
+window.addEventListener("afterprint",()=>document.querySelectorAll(".print-exclude").forEach(n=>n.classList.remove("print-exclude")));
 function downloadCSV(list,filename){
  const cells=[["תאריך","קו","מסלול","תחנה","שעה"]];
  for(const a of list)for(const row of a.rows)cells.push([a.dates.join("; "),row.line,row.route,row.stop,timeString(row.min)]);
@@ -230,8 +242,8 @@ $("groupCards").onclick=e=>{const b=e.target.closest("button");if(!b)return;cons
 $("backGen").onclick=() =>show("home");$("smartMode").onclick=()=>setMode("smart");$("manualMode").onclick=()=>setMode("manual");
 $("dayButtons").onclick=e=>{const b=e.target.closest("[data-date]");if(b)chooseDate(b.dataset.date)};
 $("analyze").onclick=analyze;$("generate").onclick=createResults;$("backResults").onclick=()=>show("generator");
-$("resultTables").onclick=e=>{const b=e.target.closest("[data-csv]");if(b)downloadCSV([generated[Number(b.dataset.csv)]],"לוח-זמנים")};
-$("downloadActions").onclick=e=>{if(e.target.id==="printPdf")window.print();if(e.target.id==="allCsv")downloadCSV(generated,"לוחות-זמנים")};
+$("resultTables").onclick=e=>{const csv=e.target.closest("[data-csv]"),pdf=e.target.closest("[data-print]");if(csv)downloadCSV([generated[Number(csv.dataset.csv)]],"לוח-זמנים");if(pdf)printSelected(Number(pdf.dataset.print))};
+$("downloadActions").onclick=e=>{if(e.target.id==="printPdf")printSelected(null);if(e.target.id==="allCsv")downloadCSV(generated,"לוחות-זמנים")};
 $("helpBtn").onclick=()=>$("helpDialog").showModal();$("closeHelp").onclick=()=>$("helpDialog").close();
 init();
 </script>
