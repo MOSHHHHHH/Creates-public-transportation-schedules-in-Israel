@@ -31,6 +31,17 @@ jobs:
           python-version: '3.12'
       - name: Test calendar and 03:00 transport-day behavior
         run: python -m unittest discover -s tests -v
+      - name: Check browser JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          src = Path("index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script>(.*?)</script>", src, re.S)
+          assert len(scripts) == 1, "Expected exactly one inline script"
+          Path("/tmp/lzm-maker-ui.js").write_text(scripts[0], encoding="utf-8")
+          PY
+          node --check /tmp/lzm-maker-ui.js
       - name: Build schedules from official daily GTFS
         run: python scripts/build_gtfs.py --output _site
       - name: Include the website
