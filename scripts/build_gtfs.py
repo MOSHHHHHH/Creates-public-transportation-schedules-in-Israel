@@ -91,7 +91,7 @@ def build(zip_path, out, start):
             number = r.get("route_short_name", "").strip()
             if not number:
                 continue
-            routes[rid] = (number, r.get("route_long_name", "").strip(), agencies.get(r.get("agency_id", ""), ""), r.get("agency_id", ""))
+            routes[rid] = (number, r.get("route_long_name", "").strip(), agencies.get(r.get("agency_id", ""), ""), r.get("agency_id", ""), r.get("route_desc", ""))
             by_line[number].add(rid)
         if not routes:
             raise ValueError("No bus routes found")
@@ -135,14 +135,17 @@ def build(zip_path, out, start):
             direction = r.get("direction_id", "")
             key = (rid, direction)
             if key not in variants:
-                number, long_name, agency, agency_id = routes[rid]
+                number, long_name, agency, agency_id, route_desc = routes[rid]
                 identity = "\x1f".join((rid, direction))
                 identifier = hashlib.sha1(identity.encode("utf-8")).hexdigest()[:16]
                 title = long_name or r.get("trip_headsign", "") or number
+                parts = route_desc.rsplit("-", 2)
+                alternative = parts[-1] if len(parts) == 3 else ""
                 if direction:
                     title += " · כיוון " + direction
                 variants[key] = {
                     "id": identifier, "name": title, "agency": agency,
+                    "alternative": alternative, "route_desc": route_desc,
                     "line": number,
                     "stops": {}, "t": defaultdict(lambda: defaultdict(list))
                 }
@@ -160,7 +163,7 @@ def build(zip_path, out, start):
             info = trip_index.get(r.get("trip_id"))
             if not info or r.get("pickup_type") == "1":
                 continue
-            raw_time = r.get("departure_time") or r.get("arrival_time")
+            raw_time = r.get("arrival_time") or r.get("departure_time")
             if not raw_time:
                 continue
             try:
@@ -202,6 +205,7 @@ def build(zip_path, out, start):
             }
             line_variants[variant["line"]].append({
                 "id": variant["id"], "name": variant["name"], "agency": variant["agency"],
+                "alternative": variant["alternative"], "route_desc": variant["route_desc"],
                 "stops": stops, "t": trip_sets
             })
         actual_lines = []
