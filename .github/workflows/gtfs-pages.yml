@@ -1,14 +1,21 @@
 name: Build and publish LZM Maker GTFS
-# Deployment runs separately from branch-based Pages publication.
-# GitHub Pages is currently also publishing main directly; running both on push
-# races two deployments for the same Pages site.
+# If Pages still publishes the main branch, wait for that deployment to finish
+# before publishing the generated GTFS site, to prevent concurrent deployments.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/gtfs-pages.yml'
   workflow_dispatch:
   schedule:
     - cron: '35 5 * * *'
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: lzm-maker-pages
@@ -72,6 +79,39 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Wait for built-in Pages branch deployment on push
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request
+          repo = os.environ["REPO"]
+          sha = os.environ["TARGET_SHA"]
+          headers = {
+              "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+              "Accept": "application/vnd.github+json",
+              "User-Agent": "lzm-maker-deployment-coordination",
+          }
+          url = f"https://api.github.com/repos/{repo}/actions/runs?head_sha={sha}&per_page=50"
+          # The native branch deployment appears soon after a push, but can be delayed.
+          for attempt in range(75):
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as response:
+                      runs = json.load(response).get("workflow_runs", [])
+                  native = [run for run in runs if run.get("name") == "pages build and deployment"]
+                  if native and all(run.get("status") == "completed" for run in native):
+                      print("Built-in Pages deployment finished. Starting GTFS Pages deployment.", flush=True)
+                      break
+                  print(f"Waiting for branch Pages deployment ({attempt+1}/75)...", flush=True)
+              except Exception as error:
+                  print("Pages status check failed; retrying:", error, flush=True)
+              time.sleep(15)
+          else:
+              raise SystemExit("Built-in Pages deployment did not finish; refusing conflicting deploy")
+          PY
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
