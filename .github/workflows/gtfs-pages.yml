@@ -42,6 +42,8 @@ jobs:
           Path("/tmp/lzm-maker-ui.js").write_text(scripts[0], encoding="utf-8")
           PY
           node --check /tmp/lzm-maker-ui.js
+      - name: UI regression smoke test
+        run: node tests/ui-smoke.cjs
       - name: Build schedules from official daily GTFS
         run: python scripts/build_gtfs.py --output _site
       - name: Include the website
