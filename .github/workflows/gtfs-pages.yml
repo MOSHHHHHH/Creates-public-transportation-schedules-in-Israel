@@ -25,7 +25,50 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 100
+    permissions:
+      contents: read
+      actions: read
+      pages: write
     steps:
+      - name: Clear stale Pages deployment before building if still locked
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import os, urllib.error, urllib.request
+          # GitHub reported this old deployment as blocking newer runs,
+          # despite the corresponding workflow already being completed.
+          stale_sha = "efd9c6ed5d8e5a08b77f88535e73e546713cba7c"
+          endpoint = f"https://api.github.com/repos/{os.environ['REPO']}/pages/deployments/{stale_sha}"
+          headers = {
+              "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+              "Accept": "application/vnd.github+json",
+              "User-Agent": "lzm-maker-stale-pages-cleanup"
+          }
+          try:
+              with urllib.request.urlopen(urllib.request.Request(endpoint, headers=headers), timeout=20) as response:
+                  status = response.read().decode("utf-8")
+              print("Old Pages deployment status:", status)
+              if '"status":"succeed"' in status.replace(" ", ""):
+                  print("Old deployment completed; not canceling.")
+                  raise SystemExit(0)
+          except urllib.error.HTTPError as e:
+              if e.code == 404:
+                  print("No stale deployment found.")
+                  raise SystemExit(0)
+              raise
+          req = urllib.request.Request(endpoint + "/cancel", headers=headers, method="POST")
+          try:
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  print("Old deployment cancel request:", response.status)
+          except urllib.error.HTTPError as e:
+              if e.code == 404:
+                  print("Old deployment already cleared.")
+              else:
+                  print("Cannot cancel stale deployment:", e.code, e.read().decode("utf-8")[:500])
+          PY
+
       - name: Checkout source
         uses: actions/checkout@v4
       - name: Set up Python
@@ -79,44 +122,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Clear specific stale Pages deployment if still locked
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-        run: |
-          python - <<'PY'
-          import os, urllib.error, urllib.request
-          # GitHub reported this old deployment as blocking newer runs,
-          # despite the corresponding workflow already being completed.
-          stale_sha = "efd9c6ed5d8e5a08b77f88535e73e546713cba7c"
-          endpoint = f"https://api.github.com/repos/{os.environ['REPO']}/pages/deployments/{stale_sha}"
-          headers = {
-              "Authorization": "Bearer " + os.environ["GH_TOKEN"],
-              "Accept": "application/vnd.github+json",
-              "User-Agent": "lzm-maker-stale-pages-cleanup"
-          }
-          try:
-              with urllib.request.urlopen(urllib.request.Request(endpoint, headers=headers), timeout=20) as response:
-                  status = response.read().decode("utf-8")
-              print("Old Pages deployment status:", status)
-              if '"status":"succeed"' in status.replace(" ", ""):
-                  print("Old deployment completed; not canceling.")
-                  raise SystemExit(0)
-          except urllib.error.HTTPError as e:
-              if e.code == 404:
-                  print("No stale deployment found.")
-                  raise SystemExit(0)
-              raise
-          req = urllib.request.Request(endpoint + "/cancel", headers=headers, method="POST")
-          try:
-              with urllib.request.urlopen(req, timeout=30) as response:
-                  print("Old deployment cancel request:", response.status)
-          except urllib.error.HTTPError as e:
-              if e.code == 404:
-                  print("Old deployment already cleared.")
-              else:
-                  print("Cannot cancel stale deployment:", e.code, e.read().decode("utf-8")[:500])
-          PY
       - name: Wait for built-in Pages branch deployment on push
         if: github.event_name == 'push'
         env:
